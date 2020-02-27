@@ -1,9 +1,16 @@
+/*
+ * Multris game
+ * @author: Bradley Aiken
+ * @date: Oct 2018
+ */
+
 /* global postScore */
 /* global scoreJSON */
+/* global url */
 
-// check for window name
+// check for window name, stores player name
 if (window.name.length < 4) {
-  window.location.href = "https://multris.glitch.me";
+  window.location.href = url;
 }
 
 /**********************
@@ -14,40 +21,46 @@ var ctx = canvas.getContext("2d");
 
 var running = true;
 
+// width and height are inclusive to borders
 var mapWidth = 12;
 var mapHeight = 24;
-var SCALE = 50;
+var SCALE = 50; // scale for drawing squares on canvas
 
 var level = 0;
 
+// number of frames to go by before piece gets pushed down
 var speeds = [100, 75, 50, 40, 30, 25, 20, 18, 15, 13, 11, 10, 9, 8, 7];
 
 var score = 0;
 var lines = 0;
-var combo = 0;
+var combo = 0; // keeps track for combo line bonus
 
+// handles weather player can hold piece
 var holdPiece = [];
 var canHold = true;
 
-var fallTimer = 0;
-var fastFallDelay = 2;
-var fallDelay = speeds[level];
+// handles piece falling
+var fallTimer = 0; // timer for falling
+var fastFallDelay = 2; // time needed for piece to fall when player holds down
+var fallDelay = speeds[level]; // time it takes for piece to fall normally
 var currentFallDelay = fallDelay;
 
 var blockTimer = 0;
 var blockDelay = 15;
 
-var shiftTimer = 0;
-var shiftDelay = 2;
-var autoShiftDelay = 15;
+// handles piece moving sideways
+var shiftTimer = 0; // timer for movement
+var shiftDelay = 2; // time needed for one block of movement when button held
+var autoShiftDelay = 15; // time needed for one block of movement initially
 var currentShiftDelay = autoShiftDelay;
 var firstShift = true;
 
 var lineClearTimer = 0;
-var lineClearDelay = 25;
+var lineClearDelay = 25; // time needed before next piece after line cleared
 var lineClearTetrisDelay = 30;
 var lineClearMultrisDelay = 35;
 
+// movement trackers
 var hardDropped = false;
 var canSoftDrop = true;
 var canHardDrop = true;
@@ -56,24 +69,27 @@ var canRotate = true;
 var gotTetris = false;
 var gotMultris = false;
 
+// setup canvas
 canvas.width = 7*SCALE + mapWidth*SCALE + 7*SCALE;
 canvas.height = mapHeight*SCALE + 180;
 
-var map = Array(mapWidth*mapHeight);
+var map = Array(mapWidth*mapHeight); // will hold information on all cells of grid
 var nextPiece = [];
 
-var linesCleared = [];
+var linesCleared = []; // current lines on map that are cleared
 
-resetMap();
+resetMap(); // initializes map
 
-// monotris piece
+// pieces are stored in the map as a string
+// each piece has a different string code
+// monomino piece
 var mPiece = [
     ".", ".", ".", 
     ".", "m", ".", 
     ".", ".", "."
 ];
 
-// dotris piece
+// domino piece
 var dPiece = [
     ".", ".", ".", ".", 
     ".", "d", "d", ".", 
@@ -81,7 +97,7 @@ var dPiece = [
     ".", ".", ".", "."
 ];
 
-// tritris pieces
+// trimino pieces
 var tiPiece = [
     ".", ".", ".", 
     "ti", "ti", "ti", 
@@ -95,7 +111,7 @@ var tcPiece = [
     ".", ".", ".", ".", 
 ]
 
-// tetris pieces
+// tetromino pieces
 var tPiece = [
     ".", ".", ".",
     "t", "t", "t",
@@ -140,7 +156,7 @@ var oPiece = [
     ".", ".", ".", "."
 ];
 
-// Multris pieces
+// pentomino pieces
 var xxPiece = [
     ".", "xx", ".",
     "xx", "xx", "xx", 
@@ -259,6 +275,7 @@ var pzPiece = [
     ".", "pz", "pz"
 ];
 
+// all pieces in the game
 var pieces = [tPiece, lPiece, jPiece, zPiece, sPiece, 
               iPiece, oPiece, xxPiece, uPiece, btPiece, 
               bcPiece, bsPiece, bzPiece, blPiece, bjPiece, 
@@ -266,30 +283,34 @@ var pieces = [tPiece, lPiece, jPiece, zPiece, sPiece,
               bmsPiece, bmzPiece, biPiece, bopPiece, bolPiece, 
               mPiece, dPiece, tcPiece, tiPiece];
 
+// maps pieces to colors
 var colors = {"t": "#b14ceb", "l": "#32f", "j": "#fc9b42", "z": "#f21", "s": "#3d4", "o": "#fc1",
               "xx": "#678", "u": "#7d8", "bt": "#c9f", "bc": "#f9f", "bs": "#6f9", "bz": "#c94",
               "bl": "#c4c9", "bj": "#9c6", "pz": "#6cc", "ps": "#ccb399", "ltl": "#98a", "ltr": "#c66",
               "st": "#fcc", "bms": "#ff9", "bmz": "#f22175", "bi": "#f7b", "bop": "#29f", "bol": "#4ba",
               "m": "#74d", "d": "#ff5050", "ti": "#d7a", "tc": "#a44", "white": "#eee", "i": "#9bf"};
 
-var pieceQueue = [];
+var pieceQueue = []; // stores upcoming pieces
 refillPieceQueue();
 refillPieceQueue();
 
 var currentPiece = pieceQueue.shift();
-var shadowPiece = currentPiece;
-var startX = 4
+var shadowPiece = currentPiece; // outline of where piece will go
+
+// location of piece
+var startX = 4; // initial position of piece
 var startY = 0;
-var x = startX;
+var x = startX; // current position of piece
 var y = startY;
-var shadowX = x;
+var shadowX = x; // current position of shadow piece
 var shadowY = y;
-var rotation = 0;
+var rotation = 0; // keeps track of rotation of piece
 
 /******************
 * STATIC FUNCTIONS
 *******************/
 function printScore() {
+    // prints score information
     ctx.font = "50px \"Press Start 2P\"";
     ctx.fillStyle = "#eee";
     ctx.fillText("Score: ", mapWidth*SCALE + 30 + 7*SCALE, 400);
@@ -299,6 +320,7 @@ function printScore() {
     ctx.fillText("Level: ", mapWidth*SCALE + 30 + 7*SCALE, 700);
     ctx.fillText((level + 1), mapWidth*SCALE + 30 + 7*SCALE, 775);
 
+    // prints control information
     ctx.font = "25px \"Press Start 2P\"";
     ctx.fillText("Arrow keys - move", 7*SCALE, (mapHeight + 1)*SCALE + 0);
     ctx.fillText("Z and X - rotate", 7*SCALE, (mapHeight + 1)*SCALE + 40);
@@ -326,6 +348,8 @@ function printScore() {
     }
 }
 
+// gets lowest possible position of where a piece can be
+// this is used to set the location of where the shadow piece is drawn
 function getLowestPosition(piece, xOffset, yOffset, rotation) {
     removePiece(currentPiece, x, y, rotation);
     while (isClear(piece, xOffset, yOffset + 1, rotation)) {
@@ -339,6 +363,7 @@ function getLowestPosition(piece, xOffset, yOffset, rotation) {
     }
 }
 
+// returns color code for piece
 function getColorByPieceCode(pieceCode) {
     if (pieceCode in colors) {
         return colors[pieceCode];
@@ -348,6 +373,8 @@ function getColorByPieceCode(pieceCode) {
     }
 }
 
+// initializes map as an array of "x" and "."
+// "x" means that there is a wall, "." means that there is empty space
 function resetMap() {
     for (let y = 0; y < mapHeight; y++) {
         for (let x = 0; x < mapWidth; x++) {
@@ -362,6 +389,8 @@ function resetMap() {
     holdPiece = [];
 }
 
+// refills upcoming pieces
+// in any set of 29 pieces, there can be no duplicates
 function refillPieceQueue() {
     var pieceSet = [];
     while (pieceSet.length != pieces.length) {
@@ -375,6 +404,7 @@ function refillPieceQueue() {
     }
 }
 
+// after a line is cleared, this pushes all lines above it down by 1
 function pushDownLines(line) {
     for (let y = line; y > 1; y--) {
         for (let x = 1; x < mapWidth; x++) {
@@ -383,6 +413,8 @@ function pushDownLines(line) {
     }
 }
 
+// checks if any row has columns that are filled
+// returns an array of filled lines
 function checkLines() {
     linesCleared = [];
     for (let y = 0; y < mapHeight - 1; y++) {
@@ -393,6 +425,8 @@ function checkLines() {
     return linesCleared;
 }
 
+// based on the piece, location, and rotation, this returns whether any cell arond it is solid
+// an algorithm is used to check if any part is solid
 function getPart(piece, x, y, rotation) {
     if (((rotation % 4) + 4) % 4 == 0) {
         return piece[y*Math.sqrt(piece.length) + x];
@@ -408,22 +442,28 @@ function getPart(piece, x, y, rotation) {
     }
 }
 
+// moves a piece according to an offset if it is free
 function placePiece(piece, xOffset, yOffset, rotation) {
     for (let y = 0; y < Math.sqrt(piece.length); y++) {
         for (let x = 0; x < Math.sqrt(piece.length); x++) {
-            map[(y + yOffset)*mapWidth + x + xOffset] = getPart(piece, x, y, rotation) != "." ? getPart(piece, x, y, rotation) : map[(y + yOffset)*mapWidth + x + xOffset];
+            map[(y + yOffset)*mapWidth + x + xOffset] = 
+                getPart(piece, x, y, rotation) != "." ? 
+                getPart(piece, x, y, rotation) : map[(y + yOffset) * mapWidth + x + xOffset];
         }
     }
 }
 
+// removes the current piece when changing its position or rotation
 function removePiece(piece, xOffset, yOffset, rotation) {
     for (let y = 0; y < Math.sqrt(piece.length); y++) {
         for (let x = 0; x < Math.sqrt(piece.length); x++) {
-            map[(y + yOffset)*mapWidth + x + xOffset] = getPart(piece, x, y, rotation) != "." ? "." : map[(y + yOffset)*mapWidth + x + xOffset];
+            map[(y + yOffset)*mapWidth + x + xOffset] = getPart(piece, x, y, rotation) != "." ? 
+              "." : map[(y + yOffset) * mapWidth + x + xOffset];
         }
     }
 }
 
+// checks whether a piece can move to a new location
 function isClear(piece, xOffset, yOffset, rotation) {
     for (let y = 0; y < Math.sqrt(piece.length); y++) {
         for (let x = 0; x < Math.sqrt(piece.length); x++) {
@@ -441,6 +481,7 @@ function drawRect(x, y, width, height, color) {
     ctx.closePath();
 }
 
+// draws all cells in the map with correct colors
 function drawMap() {
     // draw walls
     ctx.globalAlpha = 1;
@@ -481,21 +522,13 @@ function main() {
 
     // clear line animations
     if (lineClearTimer > 0) {
-        var color = "white";
-        var colors = ["t", "s", "z", "o", "i", "l", "j"];
+        var color = "white"; // default line clear color code
+        var colors = ["t", "s", "z", "o", "i", "l", "j"]; // rainbow colors for bonus line clears
         for (let y = 0; y < linesCleared.length; y++) {
             for (let x = 1; x < mapWidth - 1; x++) {
-                if (gotTetris || gotMultris)
+                if (gotTetris || gotMultris) // set rainbow colors
                     color = colors[Math.floor(Math.random() * colors.length)];
                 map[linesCleared[y]*mapWidth + x] = color;
-                if (gotMultris && x%2 == 0) {
-                    var html = document.getElementById("html");
-                    html.style.backgroundColor = "#eee";
-                }
-                else if (gotMultris % x%2 == 1) {
-                    var html = document.getElementById("html");
-                    html.style.backgroundColor = "#000";
-                }
             }
         }
     }
@@ -516,19 +549,23 @@ function main() {
     
     // handle movements
     if (blockTimer <= 0 && lineClearTimer <= 0) {
+        // move left
         if (leftPressed && !rightPressed) {
+            // wait until able to move
             if (shiftTimer % currentShiftDelay == 0) {
                 removePiece(currentPiece, x, y, rotation);
+                // only remove if clear
                 if (isClear(currentPiece, x - 1, y, rotation)) {
                     x--;
                 }
                 if (!firstShift)
-                    currentShiftDelay = shiftDelay;
+                    currentShiftDelay = shiftDelay; // increase movement speed after button held down
                 firstShift = false;
             }
             shiftTimer++;
         }
         
+        // move right
         if (rightPressed && !leftPressed) {
             if (shiftTimer % currentShiftDelay == 0) {
                 removePiece(currentPiece, x, y, rotation);
@@ -541,14 +578,15 @@ function main() {
             }
             shiftTimer++;
         }
-
+        
+        // change movement speed back to initial
         if (!leftPressed && !rightPressed) {
             shiftTimer = 0;
             currentShiftDelay = autoShiftDelay;
             firstShift = true;
         }
 
-        // soft drop
+        // soft drop, move piece down faster if down pressed
         if (downPressed && canSoftDrop) {
             currentFallDelay = fastFallDelay;
         }
@@ -560,16 +598,16 @@ function main() {
             currentFallDelay = fallDelay;
         }
 
-        // hard drop
+        // hard drop, instantly move piece down to lowest possible position
         if (spacePressed && canHardDrop) {
             var bottomX = getLowestPosition(currentPiece, x, y, rotation).x;
             var bottomY = getLowestPosition(currentPiece, x, y, rotation).y;
             removePiece(currentPiece, x, y, rotation);
-            score += 2*(bottomY - y);
+            score += 2*(bottomY - y); // increase score for hard dropping
             x = bottomX;
             y = bottomY;
             placePiece(currentPiece, x, y, rotation);
-            fallTimer = -1;
+            fallTimer = -1; // reset fall timer
             hardDropped = true;
             canHardDrop = false;
         }
@@ -595,31 +633,37 @@ function main() {
             }
         }
         
+        // player must press button multiple times to rotate more than once
         if (!zPressed && !xPressed) {
             canRotate = true;
         }
 
         // handle hold piece controls
         if (cPressed && canHold) {
+            // remove current pieve
             removePiece(currentPiece, x, y, rotation);
+            // check if hold piece empty
             if (holdPiece.length == 0) {
                 holdPiece = currentPiece;
                 currentPiece = pieceQueue.shift();
             } 
+            // swap hold piece with current
             else {
                 var temp = holdPiece;
                 holdPiece = currentPiece;
                 currentPiece = temp;
             }
+            // reset piece position
             rotation = 0;
             fallTimer = -1;
             x = startX;
             y = startY;
-            canHold = false;
+            canHold = false; // player can only swap once per piece drop
         }
     } // if blockTimer <= 0
 
-   if (fallTimer % currentFallDelay == 0 && blockTimer <= 0 && lineClearTimer <= 0) {
+    // piece must fall
+    if (fallTimer % currentFallDelay == 0 && blockTimer <= 0 && lineClearTimer <= 0) {
         removePiece(currentPiece, x, y, rotation);
         if (isClear(currentPiece, x, y + 1, rotation)) {
             y++;
@@ -690,6 +734,7 @@ function main() {
                 gotMultris = false;
             }
 
+            // increase score based on level and amount of lines cleared
             if (linesCleared.length == 1)
                 score += 100*(level + 1) + (combo - 1)*50*(level + 1);
             else if (linesCleared.length == 2)
@@ -704,13 +749,8 @@ function main() {
             // check for game over
             // return to menu, post score
             if (!isClear(currentPiece, startX, 0, rotation)) {
-                running = false;
-                postScore(window.name, score);
-                //resetMap();
-                //pieceQueue = Array(0);
-                //refillPieceQueue();
-                //refillPieceQueue();
-                //currentPiece = pieceQueue.shift();
+                running = false; // exit recursive function
+                postScore(window.name, score); // post score
             }
         }
     }
@@ -752,6 +792,7 @@ main();
 document.addEventListener("keydown", keyDownHandler, false);
 document.addEventListener("keyup", keyUpHandler, false);
 
+// button press trackers
 var rightPressed = false;
 var leftPressed = false;
 var downPressed = false;
@@ -760,7 +801,7 @@ var zPressed = false;
 var xPressed = false;
 var cPressed = false;
 
-var keyTime = 0;
+var keyTime = 0; // how long button held
 
 function keyDownHandler(e) {
     if (e.keyCode == 37) {
