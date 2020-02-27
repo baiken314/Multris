@@ -1,15 +1,19 @@
 /* global scoreJSON */
 
 $(document).ready(() => {
+  // make sure connection is https
   if (location.protocol !== 'https:') {
     location.replace(`https:${location.href.substring(location.protocol.length)}`);
   }
+  // focus on name input, store name in window.name
   $("#name-input").val(window.name);
   $("#name-input").focus();
+  // get scores
   fetch("https://multris.glitch.me/scores")
   .then(res => {
     return res.json();
   })
+  // then display scores
   .then(data => {
     for (let i = 0; i < data.length; i++) {
       $("score-board").append(

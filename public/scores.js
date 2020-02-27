@@ -18,5 +18,6 @@ function postScore(name, score) {
   })
   .then(res => res.json())
   .then(data => console.log(data));
+  // stay on lose screen for 1 second
   window.setTimeout(() => { window.location.href = url; }, 1000);
 }
